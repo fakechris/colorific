@@ -112,7 +112,8 @@ def hex_to_rgb(color):
 
 def extract_colors(filename_or_img, min_saturation=MIN_SATURATION,
         min_distance=MIN_DISTANCE, max_colors=MAX_COLORS,
-        min_prominence=MIN_PROMINENCE, n_quantized=N_QUANTIZED):
+        min_prominence=MIN_PROMINENCE, n_quantized=N_QUANTIZED,
+        is_auto_crop=True, is_auto_detect=True):
     """
     Determine what the major colors are in the given image.
     """
@@ -124,7 +125,8 @@ def extract_colors(filename_or_img, min_saturation=MIN_SATURATION,
     # get point color count
     if im.mode != 'RGB':
         im = im.convert('RGB')
-    im = autocrop(im, WHITE) # assume white box
+    if is_auto_crop:
+        im = autocrop(im, WHITE) # assume white box
     im = im.convert('P', palette=Im.ADAPTIVE, colors=n_quantized,
             ).convert('RGB')
     data = im.getdata()
@@ -156,21 +158,24 @@ def extract_colors(filename_or_img, min_saturation=MIN_SATURATION,
             key=attrgetter('prominence'),
             reverse=True)
 
-    colors, bg_color = detect_background(im, colors, to_canonical)
+    if is_auto_detect:
+        colors, bg_color = detect_background(im, colors, to_canonical)
 
-    # keep any color which meets the minimum saturation
-    sat_colors = [c for c in colors if meets_min_saturation(c, min_saturation)]
-    if bg_color and not meets_min_saturation(bg_color, min_saturation):
-        bg_color = None
-    if sat_colors:
-        colors = sat_colors
+        # keep any color which meets the minimum saturation
+        sat_colors = [c for c in colors if meets_min_saturation(c, min_saturation)]
+        if bg_color and not meets_min_saturation(bg_color, min_saturation):
+            bg_color = None
+        if sat_colors:
+            colors = sat_colors
+        else:
+            # keep at least one color
+            colors = colors[:1]
+
+        # keep any color within 10% of the majority color
+        colors = [c for c in colors if c.prominence >= colors[0].prominence
+                * min_prominence][:max_colors]
     else:
-        # keep at least one color
-        colors = colors[:1]
-
-    # keep any color within 10% of the majority color
-    colors = [c for c in colors if c.prominence >= colors[0].prominence
-            * min_prominence][:max_colors]
+        bg_color = None
 
     return Palette(colors, bg_color)
 
@@ -209,26 +214,29 @@ def print_colors(filename, palette):
         )
     sys.stdout.flush()
 
+def colors_as_image(colors):
+    size = (80 * len(colors), 80)
+    im = Image.new('RGB', size)
+    draw = ImageDraw.Draw(im)
+    for i, c in enumerate(colors):
+        v = colorsys.rgb_to_hsv(*norm_color(c))[2]
+        (x1, y1) = (i * 80, 0)
+        (x2, y2) = ((i + 1) * 80 - 1, 79)
+        draw.rectangle([(x1, y1), (x2, y2)], fill=c)
+        if v < 0.6:
+            # white with shadow
+            draw.text((x1 + 4, y1 + 4), rgb_to_hex(c), (90, 90, 90))
+            draw.text((x1 + 3, y1 + 3), rgb_to_hex(c))
+        else:
+            # dark with bright "shadow"
+            draw.text((x1 + 4, y1 + 4), rgb_to_hex(c), (230, 230, 230))
+            draw.text((x1 + 3, y1 + 3), rgb_to_hex(c), (0, 0, 0))
+    return im
+
 def save_palette_as_image(filename, palette):
     "Save palette as a PNG with labeled, colored blocks"
     output_filename = '%s_palette.png' % filename[:filename.rfind('.')]
-    size = (80 * len(palette.colors), 80)
-    im = Im.new('RGB', size)
-    draw = ImageDraw.Draw(im)
-    for i, c in enumerate(palette.colors):
-        v = colorsys.rgb_to_hsv(*norm_color(c.value))[2]
-        (x1, y1) = (i * 80, 0)
-        (x2, y2) = ((i + 1) * 80 - 1, 79)
-        draw.rectangle([(x1, y1), (x2, y2)], fill=c.value)
-        if v < 0.6:
-            # white with shadow
-            draw.text((x1 + 4, y1 + 4), rgb_to_hex(c.value), (90, 90, 90))
-            draw.text((x1 + 3, y1 + 3), rgb_to_hex(c.value))
-        else:
-            # dark with bright "shadow"
-            draw.text((x1 + 4, y1 + 4), rgb_to_hex(c.value), (230, 230, 230))
-            draw.text((x1 + 3, y1 + 3), rgb_to_hex(c.value), (0, 0, 0))
-
+    im = colors_as_image([c.value for c in palette.colors])
     im.save(output_filename, "PNG")
 
 def meets_min_saturation(c, threshold):
