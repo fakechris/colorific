@@ -113,7 +113,8 @@ def hex_to_rgb(color):
 def extract_colors(filename_or_img, min_saturation=MIN_SATURATION,
         min_distance=MIN_DISTANCE, max_colors=MAX_COLORS,
         min_prominence=MIN_PROMINENCE, n_quantized=N_QUANTIZED,
-        is_auto_crop=True, is_auto_detect=True):
+        is_auto_crop=True, is_auto_detect=True, is_manual_crop=False,
+        manual_crop_percent=None):
     """
     Determine what the major colors are in the given image.
     """
@@ -127,6 +128,11 @@ def extract_colors(filename_or_img, min_saturation=MIN_SATURATION,
         im = im.convert('RGB')
     if is_auto_crop:
         im = autocrop(im, WHITE) # assume white box
+    elif is_manual_crop and manual_crop_percent:
+        im = im.crop((im.size[0]*manual_crop_percent[0],
+            im.size[1]*manual_crop_percent[1],
+            im.size[0]*manual_crop_percent[2],
+            im.size[1]*manual_crop_percent[3]))
     im = im.convert('P', palette=Im.ADAPTIVE, colors=n_quantized,
             ).convert('RGB')
     data = im.getdata()
