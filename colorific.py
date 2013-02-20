@@ -129,10 +129,10 @@ def extract_colors(filename_or_img, min_saturation=MIN_SATURATION,
     if is_auto_crop:
         im = autocrop(im, WHITE) # assume white box
     elif is_manual_crop and manual_crop_percent:
-        im = im.crop((im.size[0]*manual_crop_percent[0],
-            im.size[1]*manual_crop_percent[1],
-            im.size[0]*manual_crop_percent[2],
-            im.size[1]*manual_crop_percent[3]))
+        im = im.crop((int(im.size[0]*manual_crop_percent[0]),
+            int(im.size[1]*manual_crop_percent[1]),
+            int(im.size[0]*manual_crop_percent[2]),
+            int(im.size[1]*manual_crop_percent[3])))
     im = im.convert('P', palette=Im.ADAPTIVE, colors=n_quantized,
             ).convert('RGB')
     data = im.getdata()
@@ -176,13 +176,12 @@ def extract_colors(filename_or_img, min_saturation=MIN_SATURATION,
         else:
             # keep at least one color
             colors = colors[:1]
-
-        # keep any color within 10% of the majority color
-        colors = [c for c in colors if c.prominence >= colors[0].prominence
-                * min_prominence][:max_colors]
     else:
         bg_color = None
 
+    # keep any color within 10% of the majority color
+    colors = [c for c in colors if c.prominence >= colors[0].prominence
+            * min_prominence][:max_colors]
     return Palette(colors, bg_color)
 
 def norm_color(c):
@@ -335,4 +334,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
